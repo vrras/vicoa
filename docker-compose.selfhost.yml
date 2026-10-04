@@ -25,10 +25,10 @@ x-backend-image: &backend-image
     AUTH_PROVIDER: ${AUTH_PROVIDER:-builtin}
     PRODUCTION_DB_URL: postgresql://${POSTGRES_USER:-vicoa}:${POSTGRES_PASSWORD:-vicoa}@postgres:5432/${POSTGRES_DB:-vicoa}
     # PEMs are multi-line, so they are mounted as files rather than env values.
-    JWT_PRIVATE_KEY_FILE: /keys/jwt_private.pem
-    JWT_PUBLIC_KEY_FILE: /keys/jwt_public.pem
-  volumes:
-    - ./selfhost/keys:/keys:ro
+    # JWT_PRIVATE_KEY_FILE: /keys/jwt_private.pem
+    # JWT_PUBLIC_KEY_FILE: /keys/jwt_public.pem
+  # volumes:
+  #   - ./selfhost/keys:/keys:ro
 
 services:
   postgres:
@@ -69,8 +69,8 @@ services:
       # `server` process's WebSocket see the change. Both sides must share
       # INTERNAL_BROADCAST_TOKEN (set it in .env).
       INTERNAL_BROADCAST_URL: http://server:8080/_internal/broadcast
-    ports:
-      - '${BACKEND_PORT:-8000}:8000'
+    # ports:
+    #   - '${BACKEND_PORT:-8000}:8000'
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -86,8 +86,8 @@ services:
       # This is the only process that mounts /ws and its ConnectionManager.
       # Keep it to a single replica for the same reason.
       ENABLE_WEBSOCKET: 'true'
-    ports:
-      - '${SERVER_PORT:-8080}:8080'
+    # ports:
+    #   - '${SERVER_PORT:-8080}:8080'
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -118,8 +118,8 @@ services:
       NEXT_PUBLIC_VICOA_WS_URL: ${PUBLIC_WS_URL:-ws://localhost:8080/ws}
       NEXT_PUBLIC_AUTH_PROVIDER: ${NEXT_PUBLIC_AUTH_PROVIDER:-builtin}
       BASE_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
-    ports:
-      - '${WEB_PORT:-3000}:3000'
+    # ports:
+    #   - '${WEB_PORT:-3000}:3000'
     depends_on:
       - backend
     restart: unless-stopped
