@@ -33,6 +33,7 @@ import * as path from 'node:path';
 import {
   bundledDaemonPath,
   generateNonce,
+  DEFAULT_AUTH_URL,
   hasWriteKey,
   isBundled,
   pickFreePort,
@@ -200,15 +201,20 @@ const daemonBaseUrl = resolveDaemonBaseUrl(selfHostEndpoints);
  */
 function applySelfHostEnv(): void {
   const { apiUrl, wsUrl, authUrl } = selfHostEndpoints;
+  // The daemon always gets an explicit base: this build's baked default or a
+  // runtime override — without it the bundled daemon falls back to ITS
+  // compiled-in default (agents.vicoa.ai) and hits the wrong deployment.
+  process.env.VICOA_API_URL = apiUrl ?? daemonBaseUrl;
+  process.env.VICOA_AUTH_URL = authUrl ?? DEFAULT_AUTH_URL;
   if (apiUrl !== undefined) {
-    process.env.VICOA_API_URL = apiUrl;
+    // Single-URL runtime override: repoint the renderer's cloud REST too.
+    // With no override the renderer keeps its build-time-baked backend URL
+    // (from the sanitized .env), which may be a different host than the
+    // daemon's agent server.
     process.env.NEXT_PUBLIC_BACKEND_API_URL = apiUrl;
   }
   if (wsUrl !== undefined) {
     process.env.NEXT_PUBLIC_VICOA_WS_URL = wsUrl;
-  }
-  if (authUrl !== undefined) {
-    process.env.VICOA_AUTH_URL = authUrl;
   }
 }
 

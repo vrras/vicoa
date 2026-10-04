@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/auth/supabase-client';
+import { isBuiltinAuth } from '@/lib/auth/auth-provider';
+import { clearBuiltinSession, getBuiltinClaims, getBuiltinToken } from '@/lib/auth/builtin-client';
 
 /**
  * Browser side of the desktop sign-in handoff (Conductor-style flow).
@@ -32,7 +34,7 @@ import { createClient } from '@/lib/auth/supabase-client';
 
 interface HandoffTokens {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
 }
 
 function buildCallbackUrl(
@@ -48,8 +50,13 @@ function buildCallbackUrl(
     // Legacy fallback (endpoint unavailable): carry the Supabase session
     // back so the app's renderer still holds a validated session. Bound by
     // the `state` nonce, same trust boundary as the api_key in this URL.
+    // Under the built-in provider this is the PRIMARY handoff — the session
+    // is a self-contained stateless JWT with no refresh-token family to
+    // corrupt, so copying it is safe.
     params.set('access_token', tokens.accessToken);
-    params.set('refresh_token', tokens.refreshToken);
+    if (tokens.refreshToken) {
+      params.set('refresh_token', tokens.refreshToken);
+    }
   }
   return `vicoa://auth/callback?${params.toString()}`;
 }
@@ -104,7 +111,9 @@ function DesktopAuthContent() {
       }
       const { apiKey } = await response.json();
       // One-time token so the app gets its own session (see file docs).
-      const tokenHash = await mintSessionTokenHash();
+      // Built-in sessions are already self-contained stateless JWTs — the
+      // access token itself is handed back, so no one-time mint is needed.
+      const tokenHash = isBuiltinAuth() ? null : await mintSessionTokenHash();
       const url = buildCallbackUrl(apiKey, state ?? '', tokenHash, tokens);
       setLaunchUrl(url);
       setPhase('done');
@@ -119,6 +128,15 @@ function DesktopAuthContent() {
   }, [state]);
 
   const continueWithSession = useCallback(async () => {
+    if (isBuiltinAuth()) {
+      const accessToken = getBuiltinToken();
+      if (!accessToken) {
+        redirectToSignIn();
+        return;
+      }
+      void mintAndLaunch({ accessToken });
+      return;
+    }
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -132,12 +150,16 @@ function DesktopAuthContent() {
   }, [mintAndLaunch, redirectToSignIn]);
 
   const useDifferentAccount = useCallback(async () => {
-    try {
-      // scope: 'local' clears this browser only — no global revoke that
-      // would sign the user's other devices out.
-      await createClient().auth.signOut({ scope: 'local' });
-    } catch {
-      // Proceed to sign-in regardless.
+    if (isBuiltinAuth()) {
+      clearBuiltinSession();
+    } else {
+      try {
+        // scope: 'local' clears this browser only — no global revoke that
+        // would sign the user's other devices out.
+        await createClient().auth.signOut({ scope: 'local' });
+      } catch {
+        // Proceed to sign-in regardless.
+      }
     }
     redirectToSignIn();
   }, [redirectToSignIn]);
@@ -154,20 +176,35 @@ function DesktopAuthContent() {
           setPhase('no-state');
           return;
         }
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
+        let signedIn: { email: string | null; tokens: HandoffTokens | null };
+        if (isBuiltinAuth()) {
+          const claims = getBuiltinClaims();
+          const accessToken = getBuiltinToken();
+          signedIn = accessToken && claims
+            ? { email: claims.email ?? null, tokens: { accessToken } }
+            : { email: null, tokens: null };
+        } else {
+          const supabase = createClient();
+          const { data: { session } } = await supabase.auth.getSession();
+          signedIn = session
+            ? {
+                email: session.user?.email ?? null,
+                tokens:
+                  session.access_token && session.refresh_token
+                    ? { accessToken: session.access_token, refreshToken: session.refresh_token }
+                    : null,
+              }
+            : { email: null, tokens: null };
+        }
         if (cancelled) return;
-        if (session) {
+        if (signedIn.tokens) {
           const resume = new URLSearchParams(window.location.search).get('resume') === '1';
           if (resume) {
             // Fresh from the sign-in round trip: that sign-in was the user
             // gesture — continue without another click.
-            const tokens = session.access_token && session.refresh_token
-              ? { accessToken: session.access_token, refreshToken: session.refresh_token }
-              : null;
-            void mintAndLaunch(tokens);
+            void mintAndLaunch(signedIn.tokens);
           } else {
-            setEmail(session.user?.email ?? null);
+            setEmail(signedIn.email);
             setPhase('ready');
           }
         } else {

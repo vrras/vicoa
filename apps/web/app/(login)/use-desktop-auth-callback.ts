@@ -9,6 +9,8 @@ import {
   readDesktopAuthNonce,
 } from '@/lib/desktop-auth';
 import { createClient } from '@/lib/auth/supabase-client';
+import { decodeBuiltinToken, isBuiltinAuth } from '@/lib/auth/auth-provider';
+import { getBuiltinToken, setBuiltinSession } from '@/lib/auth/builtin-client';
 import { trackSignInReturned, type SignInOutcome } from '@/lib/desktop-telemetry';
 
 /**
@@ -93,33 +95,59 @@ export function useDesktopAuthCallback(
       onStatusRef.current({ kind: 'connecting' });
       void (async () => {
         try {
-          // Establish the renderer's Supabase session, so cloud mode has the
-          // user's identity + data — not just the daemon's api_key. Skipped
-          // when a session already exists: a REPLAYED callback (the vicoa://
-          // URL fires from both the auto-navigation and the browser's
-          // confirm-dialog click) carries an already-consumed one-time
-          // token, and re-verifying it would fail a handoff that only needs
-          // the daemon key retried.
-          const supabase = createClient();
-          const {
-            data: { session: existingSession },
-          } = await supabase.auth.getSession();
-          if (!existingSession) {
-            if (tokenHash) {
-              // One-time token → the app's OWN session (independent refresh-
-              // token family; refreshing here can't sign the website out).
-              const { error } = await supabase.auth.verifyOtp({
-                type: 'magiclink',
-                token_hash: tokenHash,
-              });
-              if (error) throw new Error(error.message);
-            } else if (accessToken && refreshToken) {
-              // Legacy handoff from an older web deploy.
-              const { error } = await supabase.auth.setSession({
+          // Establish the renderer's session, so cloud mode has the user's
+          // identity + data — not just the daemon's api_key.
+          if (isBuiltinAuth()) {
+            // Built-in: the callback carries the deployment's stateless JWT
+            // session cookie (no refresh-token family, so copying it is
+            // safe). Adopt it unless one is already present (replayed
+            // callback — only the daemon key needs retrying).
+            if (!getBuiltinToken()) {
+              if (!accessToken) {
+                throw new Error('The sign-in link carried no session token');
+              }
+              const claims = decodeBuiltinToken(accessToken);
+              if (!claims) {
+                throw new Error('The sign-in link carried an invalid session token');
+              }
+              setBuiltinSession({
                 access_token: accessToken,
-                refresh_token: refreshToken,
+                expires_at: new Date((claims.exp ?? 0) * 1000).toISOString(),
+                user: {
+                  id: claims.sub,
+                  email: claims.email ?? '',
+                  display_name: claims.name ?? null,
+                },
               });
-              if (error) throw new Error(error.message);
+            }
+          } else {
+            // Supabase: skipped when a session already exists — a REPLAYED
+            // callback (the vicoa:// URL fires from both the auto-navigation
+            // and the browser's confirm-dialog click) carries an
+            // already-consumed one-time token, and re-verifying it would
+            // fail a handoff that only needs the daemon key retried.
+            const supabase = createClient();
+            const {
+              data: { session: existingSession },
+            } = await supabase.auth.getSession();
+            if (!existingSession) {
+              if (tokenHash) {
+                // One-time token → the app's OWN session (independent
+                // refresh-token family; refreshing here can't sign the
+                // website out).
+                const { error } = await supabase.auth.verifyOtp({
+                  type: 'magiclink',
+                  token_hash: tokenHash,
+                });
+                if (error) throw new Error(error.message);
+              } else if (accessToken && refreshToken) {
+                // Legacy handoff from an older web deploy.
+                const { error } = await supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                });
+                if (error) throw new Error(error.message);
+              }
             }
           }
           const result = await bridge.setApiKey(apiKey);

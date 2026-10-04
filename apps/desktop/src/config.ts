@@ -277,8 +277,17 @@ export function readSelfHostEndpoints(): SelfHostEndpoints {
   return endpoints;
 }
 
-/** Vicoa's hosted agent server, the daemon's default (`DEFAULT_API_URL` in backend/src/vicoa/constants.py). */
-export const DEFAULT_DAEMON_BASE_URL = 'https://agents.vicoa.ai';
+/**
+ * The agent server this build's supervised daemon talks to. Self-hosted bake:
+ * this build points at the firsaas deployment (the upstream default,
+ * agents.vicoa.ai, is what the bundled daemon would fall back to without the
+ * explicit VICOA_API_URL main sets from this). `~/.vicoa/desktop.json` or env
+ * still override at runtime.
+ */
+export const DEFAULT_DAEMON_BASE_URL = 'https://agents-vicoa.firsaas.com';
+
+/** Web dashboard this build's sign-in handoff opens (`NEXT_PUBLIC_VICOA_WEB_URL` is baked into the renderer separately). */
+export const DEFAULT_AUTH_URL = 'https://vicoa.firsaas.com';
 
 /**
  * The agent server the supervised daemon talks to, which is also the
