@@ -69,6 +69,11 @@ services:
       # `server` process's WebSocket see the change. Both sides must share
       # INTERNAL_BROADCAST_TOKEN (set it in .env).
       INTERNAL_BROADCAST_URL: http://server:8080/_internal/broadcast
+    # Advertise the listen port on the compose network. Reverse proxies that
+    # read compose metadata (Coolify/Traefik) pick the upstream port from this
+    # instead of guessing — the shared image EXPOSEs both 8000 and 8080.
+    expose:
+      - '8000'
     # ports:
     #   - '${BACKEND_PORT:-8000}:8000'
     depends_on:
@@ -86,6 +91,12 @@ services:
       # This is the only process that mounts /ws and its ConnectionManager.
       # Keep it to a single replica for the same reason.
       ENABLE_WEBSOCKET: 'true'
+    # One port only: the shared image also EXPOSEs 8000 (used by the
+    # `backend` service), but this process listens on 8080 alone. Without an
+    # explicit expose, a proxy that guesses the first EXPOSEd port (8000)
+    # lands on nothing and 502s.
+    expose:
+      - '8080'
     # ports:
     #   - '${SERVER_PORT:-8080}:8080'
     depends_on:
@@ -118,6 +129,8 @@ services:
       NEXT_PUBLIC_VICOA_WS_URL: ${PUBLIC_WS_URL:-ws://localhost:8080/ws}
       NEXT_PUBLIC_AUTH_PROVIDER: ${NEXT_PUBLIC_AUTH_PROVIDER:-builtin}
       BASE_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
+    expose:
+      - '3000'
     # ports:
     #   - '${WEB_PORT:-3000}:3000'
     depends_on:
