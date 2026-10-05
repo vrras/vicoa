@@ -357,6 +357,11 @@ usually want:
 - **`AWS_*`** — image attachments in messages.
 - **`RESEND_API_KEY`** or **`MAILGUN_*`** — transactional email.
 - **`TWILIO_*`** — SMS/email when an agent is waiting on you.
+- **`NTFY_TOPIC`** — phone push via the free [ntfy](https://ntfy.sh) app (no
+  Firebase): install the ntfy mobile app, subscribe to a topic with a random
+  unguessable suffix, set it as `NTFY_TOPIC`, redeploy. You get a buzz when a
+  session needs your input, completes, or fails. Point `NTFY_SERVER_URL` at
+  your own ntfy server to keep events off the public service.
 - **`SENTRY_DSN`** — error tracking.
 
 ## Troubleshooting

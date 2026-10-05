@@ -1303,6 +1303,7 @@ def update_agent_instance_status_endpoint(
     """
     # Imported here to avoid a circular import at module load.
     from backend.db.queries import _notify_terminate, _TERMINAL_STATUSES
+    from servers.shared.ntfy_service import notify_ntfy
 
     try:
         user_uuid = UUID(user_id)
@@ -1340,9 +1341,23 @@ def update_agent_instance_status_endpoint(
                 detail="Agent instance not found",
             )
 
+        previous_status = instance.status
         instance.status = status_enum
         if status_enum == AgentStatus.COMPLETED:
             instance.ended_at = datetime.now(timezone.utc)
+        # Phone push (ntfy) on a real transition to COMPLETED/FAILED; no-op
+        # unless NTFY_TOPIC is set. Sync endpoint → threadpool, plain call ok.
+        if (
+            status_enum in (AgentStatus.COMPLETED, AgentStatus.FAILED)
+            and previous_status != status_enum
+        ):
+            agent_name = instance.agent_type.name if instance.agent_type else "Agent"
+            tag = "white_check_mark" if status_enum == AgentStatus.COMPLETED else "warning"
+            notify_ntfy(
+                f"{agent_name} session {status_enum.value.lower()}",
+                f"Session {status_enum.value.lower()}",
+                [tag],
+            )
         # Legacy NOTIFY: wakes a listening headless process to exit
         # (websocket-migration §2.7 safety net, alive through Wave B).
         if status_enum in _TERMINAL_STATUSES:

@@ -29,6 +29,7 @@ from shared.database.agent_profile_models import AgentProfile
 from shared.database.session import SessionLocal
 from shared.database.utils import sanitize_git_diff
 from shared.llms import generate_conversation_title
+from servers.shared.ntfy_service import notify_ntfy
 from sqlalchemy import case, cast, func, or_, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, attributes
@@ -590,9 +591,19 @@ def end_session(db: Session, agent_instance_id: str, user_id: str) -> tuple[str,
 
     # Don't overwrite DELETED status
     if instance.status != AgentStatus.DELETED:
+        already_completed = instance.status == AgentStatus.COMPLETED
         instance.status = AgentStatus.COMPLETED
         instance.ended_at = datetime.now(timezone.utc)
         instance.last_heartbeat_at = datetime.now(timezone.utc)
+        if not already_completed:
+            # Phone push (ntfy) on the real completion transition; no-op unless
+            # NTFY_TOPIC is set. Fire-and-forget like the broadcast bridge.
+            agent_name = instance.agent_type.name if instance.agent_type else "Agent"
+            notify_ntfy(
+                f"{agent_name} session completed",
+                "Session completed",
+                ["white_check_mark"],
+            )
 
     return str(instance.id), instance.status.value
 

@@ -5,9 +5,11 @@ import logging
 from uuid import UUID
 from sqlalchemy.orm import Session
 
+from shared.config import settings
 from shared.database import User, AgentInstance
 from shared.websocket.connection_manager import connection_manager
 from .fcm_service import fcm_service
+from .ntfy_service import notify_ntfy
 from .twilio_service import twilio_service
 
 logger = logging.getLogger(__name__)
@@ -120,6 +122,17 @@ async def send_message_notifications(
                 logger.info(f"Push notification result for step: {result}")
         except Exception as e:
             logger.error(f"Failed to send push notification: {e}")
+
+    # ntfy (self-host phone push, no FCM): rides the same should_send_push
+    # decision — user preference plus desktop-foreground suppression. No-op
+    # unless NTFY_TOPIC is set.
+    if should_send_push and settings.ntfy_topic:
+        await asyncio.to_thread(
+            notify_ntfy,
+            f"{agent_name} needs your input" if requires_user_input else f"{agent_name} step",
+            content[:300],
+            ["incoming"],
+        )
 
     # Send Twilio notifications if enabled
     if should_send_email or should_send_sms:

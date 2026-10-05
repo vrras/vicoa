@@ -282,6 +282,14 @@ class Settings(BaseSettings):
         ""  # Firebase service account JSON as string (alternative to file)
     )
 
+    # ntfy push — self-host phone notifications without FCM. Empty topic
+    # disables the feature. Server defaults to ntfy.sh; point NTFY_SERVER_URL
+    # at a self-hosted ntfy to keep events off the public service.
+    ntfy_server_url: str = "https://ntfy.sh"
+    ntfy_topic: str = ""  # unguessable topic id; anyone who knows it can read
+    ntfy_token: str = ""  # optional ntfy access token
+    ntfy_click_url: str = ""  # optional URL opened when the notification is tapped
+
     @model_validator(mode="after")
     def _load_key_files(self) -> "Settings":
         """Back a key with its `*_KEY_FILE` when the direct value is unset.
