@@ -1,4 +1,5 @@
 // Automatic FlutterFlow imports
+import '/backend/auth_mode.dart';
 import '/backend/supabase/supabase.dart';
 import 'index.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import 'package:flutter/material.dart';
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
 Future<dynamic> apiGetMobileSubscriptionStatus() async {
+  // Hosted billing endpoint; self-host has no subscriptions.
+  if (!kUseSupabaseAuth) return null;
   try {
     final result = await vicoaApiRequest('get', '/api/v1/billing/mobile/status', null);
     return result;

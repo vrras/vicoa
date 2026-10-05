@@ -1,4 +1,6 @@
 // Automatic FlutterFlow imports
+import '/auth/builtin_auth/builtin_auth.dart';
+import '/backend/auth_mode.dart';
 import '/backend/supabase/supabase.dart';
 import 'index.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +9,23 @@ import 'package:flutter/material.dart';
 
 Future<dynamic> apiSyncUser() async {
   try {
+    // Builtin mode: the backend already owns this account, but the sync
+    // payload is still required (e.g. display-name changes) — build it from
+    // the session user instead of Supabase metadata.
+    if (!kUseSupabaseAuth) {
+      final sessionUser = BuiltinAuth.instance.currentUser;
+      if (sessionUser == null) {
+        print('No authenticated user found');
+        return null;
+      }
+      final result = await vicoaApiRequest('post', '/api/v1/auth/sync-user', {
+        'id': sessionUser['id'],
+        'email': sessionUser['email'],
+        'display_name': sessionUser['display_name'] ?? '',
+      });
+      return result;
+    }
+
     // Get current user info from Supabase
     final user = SupaFlow.client.auth.currentUser;
     if (user == null) {

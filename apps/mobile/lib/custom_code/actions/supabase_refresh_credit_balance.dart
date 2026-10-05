@@ -7,12 +7,15 @@ import '/flutter_flow/flutter_flow_util.dart';
 import 'index.dart'; // Imports other custom actions
 import '/flutter_flow/custom_functions.dart'; // Imports custom functions
 import 'package:flutter/material.dart';
+import '/backend/auth_mode.dart';
 // Begin custom action code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
 /// Fetches the latest credit balance from Supabase profiles and updates local state.
 /// Returns the updated balance, or null if the fetch failed.
 Future<int?> supabaseRefreshCreditBalance() async {
+  // Hosted-only (Supabase monetization tables); no-op in builtin mode.
+  if (!kUseSupabaseAuth) return null;
   final userId = FFAppState().user.id;
 
   if (userId.isEmpty || userId.contains('Superwall')) {

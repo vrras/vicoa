@@ -7,6 +7,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import 'index.dart'; // Imports other custom actions
 import '/flutter_flow/custom_functions.dart'; // Imports custom functions
 import 'package:flutter/material.dart';
+import '/backend/auth_mode.dart';
 // Begin custom action code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
@@ -26,6 +27,8 @@ import 'package:flutter/material.dart';
 /// is unchanged in both places. Safe to call before signup completes
 /// (skips the Supabase write when there's no real user id yet).
 Future<void> supabasePersistSubscriptionStatus(String status) async {
+  // Hosted-only (Supabase monetization tables); no-op in builtin mode.
+  if (!kUseSupabaseAuth) return;
   if (status.isEmpty) return;
 
   final user = FFAppState().user;

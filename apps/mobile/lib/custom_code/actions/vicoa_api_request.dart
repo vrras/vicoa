@@ -9,6 +9,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '/backend/auth_mode.dart';
+import '/auth/builtin_auth/builtin_auth.dart';
 import 'vicoa_api_config.dart';
 
 // Custom exceptions for categorizing errors
@@ -264,6 +266,10 @@ Future<T> vicoaApiRequestComputed<T>(
 }
 
 Future<String?> getUserToken() async {
+  // Self-hosted build: no Supabase — the builtin session is the token source.
+  if (!kUseSupabaseAuth) {
+    return BuiltinAuth.instance.validToken;
+  }
   // Get Supabase JWT token
   // Supabase handles automatic token refresh via autoRefreshToken: true
   var session = SupaFlow.client.auth.currentSession;

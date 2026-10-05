@@ -13,7 +13,8 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import '/backend/supabase/supabase.dart';
+import '/auth/supabase_auth/auth_util.dart'
+    show authLifecycleEvents, AuthLifecycleEvent;
 import 'user_agents_cache.dart';
 import 'vicoa_api_config.dart';
 import 'vicoa_api_request.dart' show getUserToken;
@@ -76,14 +77,14 @@ class _PendingRpc {
 /// network change) is handled here so the home/chat models stay simple (§4b).
 class VicoaWsClient with WidgetsBindingObserver {
   VicoaWsClient._() {
-    // Mirror Supabase JWT lifecycle into the WS connection (§4b):
-    //   tokenRefreshed / signedIn → reconnect so server-side auth sees the
-    //   fresh JWT (also drops a previous user's authenticated socket on an
-    //   account switch); signedOut → close and stop reconnecting until the
-    //   next signedIn. SupaFlow is initialized in main() before any screen
-    //   touches `VicoaWsClient.instance`, so this listen is safe at field
-    //   init time.
-    _authSub = SupaFlow.client.auth.onAuthStateChange.listen(_handleAuthChange);
+    // Mirror auth lifecycle into the WS connection (§4b):
+    //   signedIn (incl. supabase tokenRefreshed) → reconnect so server-side
+    //   auth sees the fresh JWT (also drops a previous user's authenticated
+    //   socket on an account switch); signedOut → close and stop reconnecting
+    //   until the next signedIn. authLifecycleEvents is provider-agnostic —
+    //   in builtin mode it's the builtin session stream and never touches
+    //   SupaFlow, so this listen is safe at field init time in both modes.
+    _authSub = authLifecycleEvents.listen(_handleAuthChange);
   }
 
   static final VicoaWsClient instance = VicoaWsClient._();
@@ -102,7 +103,7 @@ class VicoaWsClient with WidgetsBindingObserver {
   Timer? _reconnectTimer;
   Timer? _livenessTimer;
   Timer? _idleCloseTimer;
-  StreamSubscription<AuthState>? _authSub;
+  StreamSubscription<AuthLifecycleEvent>? _authSub;
 
   final Map<String, _WatchedInstance> _watched = {};
   // request_id → the catch-up job awaiting that fetch_messages_response.
@@ -429,8 +430,7 @@ class VicoaWsClient with WidgetsBindingObserver {
   }
 
   void _ensureAuthListener() {
-    _authSub ??=
-        SupaFlow.client.auth.onAuthStateChange.listen(_handleAuthChange);
+    _authSub ??= authLifecycleEvents.listen(_handleAuthChange);
   }
 
   Future<void> _waitUntilConnected({
@@ -504,22 +504,21 @@ class VicoaWsClient with WidgetsBindingObserver {
     }
   }
 
-  void _handleAuthChange(AuthState authState) {
-    switch (authState.event) {
-      case AuthChangeEvent.signedIn:
-      case AuthChangeEvent.tokenRefreshed:
-        // A fresh JWT — reconnect so server-side auth is aligned with the
+  void _handleAuthChange(AuthLifecycleEvent event) {
+    switch (event) {
+      case AuthLifecycleEvent.signedIn:
+        // A fresh token — reconnect so server-side auth is aligned with the
         // client's current session. On signedIn after an account switch
         // this also drops the previous user's authenticated socket. Skip
         // when not yet connected: a pending _connect() reads the same
-        // fresh token from currentSession, so re-firing would just thrash
+        // fresh token from getUserToken(), so re-firing would just thrash
         // the in-flight handshake.
         if (_retainCount > 0 && !_destroyed && _connected) {
-          debugPrint('[ws] auth ${authState.event.name} → reconnecting');
+          debugPrint('[ws] auth ${event.name} → reconnecting');
           _forceReconnect();
         }
         break;
-      case AuthChangeEvent.signedOut:
+      case AuthLifecycleEvent.signedOut:
         // No authenticated user — close the socket and stop reconnecting.
         // _watched is cleared too: if UI hasn't yet released its instance
         // subscriptions (e.g. token-expiry-driven signedOut beats screen

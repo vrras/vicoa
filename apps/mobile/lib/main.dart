@@ -7,10 +7,11 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:flutter/foundation.dart';
 import '/custom_code/actions/index.dart' as actions;
 
-import 'auth/supabase_auth/supabase_user_provider.dart';
+import 'auth/builtin_auth/builtin_auth.dart';
 import 'auth/supabase_auth/auth_util.dart';
 import '/backend/push_notifications/push_notifications_handler.dart';
 
+import '/backend/auth_mode.dart';
 import '/backend/supabase/supabase.dart';
 import 'backend/firebase/firebase_config.dart';
 import '/backend/posthog/posthog_analytics.dart';
@@ -30,7 +31,9 @@ void main() async {
   GoRouter.optionURLReflectsImperativeAPIs = true;
   usePathUrlStrategy();
 
-  await initFirebase();
+  // Self-hosted builds often run without a usable Firebase project; telemetry
+  // stays off and startup continues.
+  final firebaseReady = await initFirebase();
   await initPostHog();
 
   // Start initial custom actions code
@@ -54,13 +57,25 @@ void main() async {
   }
   // End initial custom actions code
 
-  await SupaFlow.initialize();
+  if (kUseSupabaseAuth) {
+    await SupaFlow.initialize();
+  } else {
+    // Self-hosted build: no Supabase project — restore the builtin session
+    // before the router builds so the auth gate resolves on first frame.
+    await BuiltinAuth.instance.load();
+  }
 
   await FlutterFlowTheme.initialize();
 
   // Initialize Push Notifications
   if (!kIsWeb) {
-    await PushNotificationsHandler().initialize();
+    try {
+      await PushNotificationsHandler().initialize();
+    } catch (e) {
+      // Push needs Firebase/APNs entitlements that free-provisioned
+      // self-hosted builds don't have; quiet failure is fine.
+      debugPrint('Push notifications unavailable: $e');
+    }
   }
 
   final appState = FFAppState(); // Initialize FFAppState
@@ -75,7 +90,7 @@ void main() async {
     debugLogAppState(appState);
   });
 
-  if (!kIsWeb) {
+  if (!kIsWeb && firebaseReady) {
     FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
   }
 
@@ -194,7 +209,7 @@ class _MyAppState extends State<MyApp> {
 
     _appStateNotifier = AppStateNotifier.instance;
     _router = createRouter(_appStateNotifier);
-    userStream = vicoaSupabaseUserStream()
+    userStream = authUserStream()
       ..listen((user) {
         _appStateNotifier.update(user);
         debugLogAuthenticatedUser();

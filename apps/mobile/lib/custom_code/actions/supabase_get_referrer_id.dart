@@ -7,6 +7,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import 'index.dart'; // Imports other custom actions
 import '/flutter_flow/custom_functions.dart'; // Imports custom functions
 import 'package:flutter/material.dart';
+import '/backend/auth_mode.dart';
 // Begin custom action code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
@@ -14,6 +15,8 @@ import 'package:flutter/material.dart';
 // and then add the boilerplate code using the green button on the right!
 
 Future<String?> supabaseGetReferrerId(String referralCode) async {
+  // Hosted-only (Supabase monetization tables); no-op in builtin mode.
+  if (!kUseSupabaseAuth) return null;
   // Validate inputs
   if (referralCode.isEmpty) {
     debugPrint('Error: referralCode must not be empty');

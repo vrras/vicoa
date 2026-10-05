@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '/auth/supabase_auth/auth_util.dart';
+import '/backend/auth_mode.dart';
 import '/backend/posthog/posthog_analytics.dart';
 import '/backend/schema/structs/index.dart';
 import '/backend/supabase/supabase.dart';
@@ -197,6 +198,11 @@ Future<void> _persistCreditChangeBestEffort({
   if (userId.isEmpty || userId.contains('Superwall')) {
     return;
   }
+  // Hosted-only write-through (credit_transactions/profiles are Supabase
+  // tables); in builtin mode the local balance is the whole truth.
+  if (!kUseSupabaseAuth) {
+    return;
+  }
 
   final nowUtc = DateTime.now().toUtc().toIso8601String();
   final createdAtUtc = createdAt.toUtc().toIso8601String();
@@ -227,12 +233,16 @@ Future<void> _persistCreditChangeBestEffort({
         'amount': amount,
       },
     );
-    unawaited(FirebaseCrashlytics.instance.recordError(
-      e,
-      st,
-      reason: 'Async credit sync failed',
-      fatal: false,
-    ));
+    // Crashlytics may be uninitialized on self-hosted builds; telemetry is
+    // best-effort and must never out-throw the failure it is reporting.
+    try {
+      unawaited(FirebaseCrashlytics.instance.recordError(
+        e,
+        st,
+        reason: 'Async credit sync failed',
+        fatal: false,
+      ));
+    } catch (_) {}
 
     // One lightweight retry to reduce temporary network loss.
     Future.delayed(const Duration(seconds: 3), () async {

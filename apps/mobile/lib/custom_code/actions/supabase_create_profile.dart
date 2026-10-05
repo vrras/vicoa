@@ -7,12 +7,15 @@ import '/flutter_flow/flutter_flow_util.dart';
 import 'index.dart'; // Imports other custom actions
 import '/flutter_flow/custom_functions.dart'; // Imports custom functions
 import 'package:flutter/material.dart';
+import '/backend/auth_mode.dart';
 // Begin custom action code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
 import '/auth/supabase_auth/auth_util.dart';
 
 Future supabaseCreateProfile(String id, String? superwallId, String? revenueCatId) async {
+  // Hosted-only (Supabase monetization tables); no-op in builtin mode.
+  if (!kUseSupabaseAuth) return;
   try {
     final now = DateTime.now().toUtc().toIso8601String();
     // Seed subscription_status from whatever local state already knows:

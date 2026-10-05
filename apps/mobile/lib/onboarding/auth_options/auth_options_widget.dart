@@ -1,5 +1,6 @@
 import '/actions/actions.dart' as action_blocks;
 import '/auth/supabase_auth/auth_util.dart';
+import '/backend/auth_mode.dart';
 import '/backend/schema/structs/index.dart';
 import '/backend/supabase/supabase.dart';
 import '/custom_code/actions/index.dart' as actions;
@@ -94,6 +95,11 @@ class _AuthOptionsWidgetState extends State<AuthOptionsWidget> with RouteAware {
     String method,
   ) async {
     if (_isSocialSignInInProgress) {
+      return;
+    }
+    // Builtin mode has no Supabase: its buttons are hidden below, and this
+    // body touches SupaFlow (session recovery + profiles table) directly.
+    if (!kUseSupabaseAuth) {
       return;
     }
 
@@ -281,44 +287,48 @@ class _AuthOptionsWidgetState extends State<AuthOptionsWidget> with RouteAware {
                             ),
                           ),
                         ),
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(0.0, 8.0, 0.0, 24.0),
-                          child: FFButtonWidget(
-                            onPressed: _isSocialSignInInProgress
-                                ? null
-                                : () async {
-                                    logFirebaseEvent('AUTH_OPTIONS_CONTINUE_GOOGLE_BTN_ON_TAP');
-                                    posthogCapture('onboarding_auth_method_selected', properties: {'method': 'google'});
-                                    _authMethodPicked = true;
-                                    HapticFeedback.lightImpact();
-                                    await _handleSocialSignIn(() => authManager.signInWithGoogle(context), 'google');
-                                  },
-                            icon: FaIcon(FontAwesomeIcons.google, color: Colors.white, size: 18.0),
-                            text: l10n.authOptionsContinueWithGoogle,
-                            showLoadingIndicator: true,
-                            options: FFButtonOptions(
-                              width: double.infinity,
-                              height: 56.0,
-                              color: Color(0x75707070),
-                              textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-                                    font: GoogleFonts.sourceSans3(
+                        // Social sign-in is a hosted-only feature (needs the
+                        // Supabase OAuth config); self-hosted builds offer
+                        // email only.
+                        if (kUseSupabaseAuth)
+                          Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(0.0, 8.0, 0.0, 24.0),
+                            child: FFButtonWidget(
+                              onPressed: _isSocialSignInInProgress
+                                  ? null
+                                  : () async {
+                                      logFirebaseEvent('AUTH_OPTIONS_CONTINUE_GOOGLE_BTN_ON_TAP');
+                                      posthogCapture('onboarding_auth_method_selected', properties: {'method': 'google'});
+                                      _authMethodPicked = true;
+                                      HapticFeedback.lightImpact();
+                                      await _handleSocialSignIn(() => authManager.signInWithGoogle(context), 'google');
+                                    },
+                              icon: FaIcon(FontAwesomeIcons.google, color: Colors.white, size: 18.0),
+                              text: l10n.authOptionsContinueWithGoogle,
+                              showLoadingIndicator: true,
+                              options: FFButtonOptions(
+                                width: double.infinity,
+                                height: 56.0,
+                                color: Color(0x75707070),
+                                textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                                      font: GoogleFonts.sourceSans3(
+                                        fontWeight: FontWeight.w500,
+                                        fontStyle: FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                                      ),
+                                      color: Colors.white,
+                                      fontSize: 18.0,
+                                      letterSpacing: 0.0,
                                       fontWeight: FontWeight.w500,
                                       fontStyle: FlutterFlowTheme.of(context).titleSmall.fontStyle,
                                     ),
-                                    color: Colors.white,
-                                    fontSize: 18.0,
-                                    letterSpacing: 0.0,
-                                    fontWeight: FontWeight.w500,
-                                    fontStyle: FlutterFlowTheme.of(context).titleSmall.fontStyle,
-                                  ),
-                              elevation: 0.0,
-                              borderSide: BorderSide(color: Color(0x1AFFFFFF), width: 1.0),
-                              borderRadius: BorderRadius.circular(28.0),
-                              hoverColor: Color(0x402B2B2B),
+                                elevation: 0.0,
+                                borderSide: BorderSide(color: Color(0x1AFFFFFF), width: 1.0),
+                                borderRadius: BorderRadius.circular(28.0),
+                                hoverColor: Color(0x402B2B2B),
+                              ),
                             ),
                           ),
-                        ),
-                        if (!Platform.isAndroid)
+                        if (kUseSupabaseAuth && !Platform.isAndroid)
                           Padding(
                             padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 24.0),
                             child: FFButtonWidget(

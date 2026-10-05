@@ -1,11 +1,14 @@
 // Automatic FlutterFlow imports
 import '/backend/supabase/supabase.dart';
 import 'package:flutter/material.dart';
+import '/backend/auth_mode.dart';
 // Begin custom action code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
 Future<int> supabaseGetReferralCount(
     BuildContext context, String referrerId) async {
+      // Hosted-only (Supabase monetization tables); no-op in builtin mode.
+      if (!kUseSupabaseAuth) return 0;
   final supabase = SupaFlow.client;
 
   try {

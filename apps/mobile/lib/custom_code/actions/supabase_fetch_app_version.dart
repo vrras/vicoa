@@ -7,12 +7,15 @@ import '/flutter_flow/flutter_flow_util.dart';
 import 'index.dart'; // Imports other custom actions
 import '/flutter_flow/custom_functions.dart'; // Imports custom functions
 import 'package:flutter/material.dart';
+import '/backend/auth_mode.dart';
 // Begin custom action code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
 import 'dart:io';
 
 Future<String?> supabaseFetchAppVersion() async {
+  // Hosted-only (Supabase monetization tables); no-op in builtin mode.
+  if (!kUseSupabaseAuth) return null;
   final supabase = SupaFlow.client;
 
   // Determine platform

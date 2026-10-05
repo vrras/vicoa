@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '/backend/supabase/supabase.dart';
+import '/auth/supabase_auth/auth_util.dart' show currentJwtToken;
 import '/custom_code/actions/vicoa_api_config.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
@@ -106,7 +106,7 @@ class _AttachmentImage extends StatelessWidget {
     // Stable per-attachment URL → disk cache key. The bearer token only
     // matters on first fetch; the immutable response stays cached after.
     final url = '${getVicoaApiBaseUrl()}/api/v1/attachments/$id';
-    final token = SupaFlow.client.auth.currentSession?.accessToken ?? '';
+    final token = currentJwtToken;
     return CachedNetworkImage(
       imageUrl: url,
       httpHeaders: {'Authorization': 'Bearer $token'},

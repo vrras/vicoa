@@ -1,5 +1,6 @@
 import '/flutter_flow/app_locale.dart';
 import '/l10n/app_localizations.dart';
+import '/backend/auth_mode.dart';
 import '/pages/common/session_actions.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/actions/index.dart' as actions;
@@ -1447,6 +1448,8 @@ String? latestWebPreviewUrl;
   /// fresh send (the failed attempt was refunded).
   Future<({bool ok, bool charged})> _chargeCreditForSend(
       BuildContext context) async {
+    // Self-hosted builds have no credit system — sends are ungated.
+    if (!kUseSupabaseAuth) return (ok: true, charged: false);
     final hasActiveSubscription = await actions.hasActiveSubscription();
     if (hasActiveSubscription) return (ok: true, charged: false);
 

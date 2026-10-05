@@ -1,7 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '/backend/supabase/supabase.dart';
+import '/auth/supabase_auth/auth_util.dart' show currentJwtToken;
 import '/custom_code/actions/vicoa_api_config.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
@@ -155,7 +155,7 @@ class PrincipalAvatar extends StatelessWidget {
       // cache-buster and the disk-cache key.
       final version = updatedAt == null ? '' : '?v=${Uri.encodeComponent(updatedAt!)}';
       final url = '${getVicoaApiBaseUrl()}/api/v1/users/$id/avatar$version';
-      final token = SupaFlow.client.auth.currentSession?.accessToken ?? '';
+      final token = currentJwtToken;
       return CachedNetworkImage(
         imageUrl: url,
         httpHeaders: {'Authorization': 'Bearer $token'},

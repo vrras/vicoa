@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '/backend/supabase/supabase.dart';
+import '/auth/supabase_auth/auth_util.dart' show currentJwtToken;
 import '/custom_code/actions/vicoa_api_config.dart';
 import '/custom_code/utils/project_icons.dart' as picons;
 import '/custom_code/utils/task_utils.dart' as tutils;
@@ -234,7 +234,7 @@ class TaskProjectIcon extends StatelessWidget {
     final fallback = _fallback(context);
     final imageUrl = _imageUrl();
     if (imageUrl == null) return fallback;
-    final token = SupaFlow.client.auth.currentSession?.accessToken ?? '';
+    final token = currentJwtToken;
     return ClipRRect(
       borderRadius: BorderRadius.circular(_radius),
       child: CachedNetworkImage(
