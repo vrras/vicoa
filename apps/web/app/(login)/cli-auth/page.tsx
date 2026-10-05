@@ -136,9 +136,20 @@ function CliAuthContent() {
 
       const { apiKey } = await response.json();
 
-      // Notify local CLI server with the API key
+      // Notify local CLI server with the API key. `no-cors` returns an opaque
+      // response, but a dead listener still REJECTS the fetch — and the CLI's
+      // callback server only lives while `vicoa --auth` waits (~5 minutes).
+      // Surface that instead of claiming success; the user can still fall
+      // back to copying the key manually.
       const callbackUrl = `http://127.0.0.1:${port}?api_key=${encodeURIComponent(apiKey)}&state=${encodeURIComponent(state)}`;
-      await fetch(callbackUrl, { mode: 'no-cors' }).catch(() => {});
+      try {
+        await fetch(callbackUrl, { mode: 'no-cors' });
+      } catch {
+        throw new Error(
+          `Couldn't reach the Vicoa CLI on 127.0.0.1:${port} — it probably timed out. ` +
+            'Re-run `vicoa --auth` and click Connect again within 5 minutes, or copy the API key manually below.'
+        );
+      }
 
       setConnected(true);
 
