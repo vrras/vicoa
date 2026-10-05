@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/auth/supabase-client';
+import { isBuiltinAuth } from '@/lib/auth/auth-provider';
 import { getDesktopConfig } from '@/lib/runtime-config';
 import { getDesktopAuthBridge } from '@/lib/desktop-auth';
 import { hasCompletedDesktopSetup, hasSeenDesktopIntro } from '@/lib/desktop-onboarding';
@@ -108,7 +109,24 @@ export function DesktopAuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Cloud mode: validate the session in the background.
+    // Self-hosted / builtin-auth shell (isBuiltinAuth is baked at build time;
+    // cloudApiBase is only injected when desktop.json carries apiUrl). There is
+    // no Supabase to hold a renderer session under AUTH_PROVIDER=builtin — the
+    // daemon's write_key IS the identity, and cloud mode already proves it
+    // exists. Trust it and never fall through to sign-out: that path deleted
+    // the key on every load, looping the shell between the dashboard and the
+    // welcome screen.
+    if (isBuiltinAuth() || config?.cloudApiBase) {
+      if (onAuthRoute || pathname === '/') {
+        setCloudRedirecting(true);
+        router.replace(hasCompletedDesktopSetup() ? '/dashboard' : '/desktop-setup');
+        return;
+      }
+      setCloudRedirecting(false);
+      return;
+    }
+
+    // Hosted cloud mode: validate the session in the background.
     const { session, ok } = await readSession();
     if (!ok) {
       // Transient/offline read: fail open — the write_key already vouches for
