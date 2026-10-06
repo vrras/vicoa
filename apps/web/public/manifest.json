@@ -2,7 +2,7 @@
   "name": "Vicoa - Vibe Code Anywhere, Claude Code Anywhere",
   "short_name": "Vicoa",
   "description": "Vicoa lets you use Claude Code anywhere, on any device. Start coding on your laptop, switch easily to mobile or web, get alerts when your AI agent needs input, and approve changes with one tap.",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#1a1a1a",
