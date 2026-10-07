@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
     aws_region: str = ""
+    # Offline self-host: set STORAGE_DIR to a writable path and leave the AWS_*
+    # keys empty — shared.storage then keeps objects on disk under that path
+    # instead of S3. Ignored when both AWS key fields are set.
+    storage_dir: str = ""
 
     # WebSocket endpoint URL that clients connect to (websocket-migration §2.1).
     # The /ws endpoint lives on the agent-facing `server` process, which is

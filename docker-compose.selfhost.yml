@@ -24,10 +24,15 @@ x-backend-image: &backend-image
     # set AUTH_PROVIDER=supabase in .env to delegate to a Supabase project.
     AUTH_PROVIDER: ${AUTH_PROVIDER:-builtin}
     PRODUCTION_DB_URL: postgresql://${POSTGRES_USER:-vicoa}:${POSTGRES_PASSWORD:-vicoa}@postgres:5432/${POSTGRES_DB:-vicoa}
+    # Attachments/avatars/icons: with AWS_* empty in .env, shared.storage
+    # writes to this path on disk instead of S3 (offline self-host, no MinIO).
+    STORAGE_DIR: ${STORAGE_DIR:-/data/storage}
     # PEMs are multi-line, so they are mounted as files rather than env values.
     # JWT_PRIVATE_KEY_FILE: /keys/jwt_private.pem
     # JWT_PUBLIC_KEY_FILE: /keys/jwt_public.pem
-  # volumes:
+  volumes:
+    - vicoa-storage:/data/storage
+  # For JWT key files instead of inline PEMs, add:
   #   - ./selfhost/keys:/keys:ro
 
 services:
@@ -139,3 +144,4 @@ services:
 
 volumes:
   vicoa-postgres:
+  vicoa-storage:

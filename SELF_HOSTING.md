@@ -354,7 +354,9 @@ usually want:
 - **`ANTHROPIC_API_KEY` / `OPENROUTER_API_KEY`** — LLM-generated session titles
   (without them, titles fall back to a truncated first message).
 - **`DEEPGRAM_API_KEY`** — voice input.
-- **`AWS_*`** — image attachments in messages.
+- **`AWS_*`** — image attachments in messages. Offline alternative: leave
+  `AWS_*` empty and set `STORAGE_DIR` to a writable path to store them on
+  disk instead of S3.
 - **`RESEND_API_KEY`** or **`MAILGUN_*`** — transactional email.
 - **`TWILIO_*`** — SMS/email when an agent is waiting on you.
 - **`NTFY_TOPIC`** — phone push via the free [ntfy](https://ntfy.sh) app (no
