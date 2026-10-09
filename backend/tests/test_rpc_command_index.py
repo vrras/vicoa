@@ -1,5 +1,6 @@
 """Tests for the `scan-commands` RPC and the multi-agent command/skill scanner."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -137,6 +138,91 @@ def test_codex_scan_skips_hidden_system_skills(home: Path):
 def test_agents_without_a_local_source_scan_empty(home: Path):
     assert scan_agent_commands("opencode") == {}
     assert scan_agent_commands("amp") == {}
+
+
+# ---------------------------------------------------------------------------
+# Plugin-sourced commands/skills (`plugin:name`)
+# ---------------------------------------------------------------------------
+
+
+def _install_plugin(
+    home: Path,
+    plugin_id: str,
+    namespace: str,
+    *,
+    enabled: bool | None = True,
+) -> None:
+    install_path = home / ".claude" / "plugins" / "cache" / plugin_id / "1.0.0"
+    commands_dir = install_path / "commands"
+    commands_dir.mkdir(parents=True)
+    (commands_dir / "pair.md").write_text(
+        "---\ndescription: Pair up\n---\n", encoding="utf-8"
+    )
+    _write_skill(install_path / "skills", "cast", "Summon cast")
+    manifest_dir = install_path / ".claude-plugin"
+    manifest_dir.mkdir(parents=True)
+    (manifest_dir / "plugin.json").write_text(
+        json.dumps({"name": namespace, "version": "1.0.0"}), encoding="utf-8"
+    )
+
+    plugins_dir = home / ".claude" / "plugins"
+    registry = {
+        "version": 2,
+        "plugins": {
+            f"{plugin_id}@market": [
+                {"scope": "user", "installPath": str(install_path), "version": "1.0.0"}
+            ]
+        },
+    }
+    (plugins_dir / "installed_plugins.json").write_text(
+        json.dumps(registry), encoding="utf-8"
+    )
+
+    if enabled is not None:
+        (home / ".claude" / "settings.json").write_text(
+            json.dumps({"enabledPlugins": {f"{plugin_id}@market": enabled}}),
+            encoding="utf-8",
+        )
+
+
+def test_claude_scan_includes_namespaced_plugin_commands_and_skills(
+    home: Path, tmp_path: Path
+):
+    _install_plugin(home, "16minds", "16-minds")
+
+    scanned = scan_claude_commands(project_root=tmp_path / "project")
+
+    assert scanned["16-minds:pair"] == {"description": "Pair up", "kind": "command"}
+    assert scanned["16-minds:cast"] == {"description": "Summon cast", "kind": "skill"}
+
+
+def test_disabled_plugin_is_skipped(home: Path, tmp_path: Path):
+    _install_plugin(home, "16minds", "16-minds", enabled=False)
+
+    scanned = scan_claude_commands(project_root=tmp_path / "project")
+
+    assert not any(name.startswith("16-minds:") for name in scanned)
+
+
+def test_plugin_without_enabledplugins_entry_is_enabled(home: Path, tmp_path: Path):
+    _install_plugin(home, "16minds", "16-minds", enabled=None)
+
+    scanned = scan_claude_commands(project_root=tmp_path / "project")
+
+    assert "16-minds:pair" in scanned
+
+
+def test_explicit_command_wins_over_plugin_namespace(home: Path, tmp_path: Path):
+    commands_dir = home / ".claude" / "commands"
+    commands_dir.mkdir(parents=True)
+    (commands_dir / "16-minds:pair.md").write_text(
+        "---\ndescription: User override\n---\n", encoding="utf-8"
+    )
+    _install_plugin(home, "16minds", "16-minds")
+
+    scanned = scan_claude_commands(project_root=tmp_path / "project")
+
+    assert scanned["16-minds:pair"] == {"description": "User override", "kind": "command"}
 
 
 # ---------------------------------------------------------------------------

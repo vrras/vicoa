@@ -6,6 +6,7 @@ put in the composer when the entry is picked (Codex invokes skills with
 ``$name``, not ``/name``).
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -193,6 +194,53 @@ def codex_skill_roots(project_root: Path | None = None) -> list[tuple[Path, str]
     return roots
 
 
+def _scan_plugin_commands() -> dict:
+    """Scan installed Claude plugins for namespaced commands/skills (``ns:name``).
+
+    Mirrors what the Claude CLI surfaces: `~/.claude/plugins/installed_plugins.json`
+    lists installed plugins with their on-disk ``installPath``; each plugin's
+    ``.claude-plugin/plugin.json`` declares ``name`` — the namespace clients see
+    (``16-minds:pair``); ``~/.claude/settings.json`` ``enabledPlugins`` marks
+    disabled plugins (absent = enabled). Callers merge with explicit user
+    commands/skills keeping precedence on collision.
+    """
+    registry = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    try:
+        plugins = json.loads(registry.read_text(encoding="utf-8")).get("plugins") or {}
+    except (OSError, ValueError):
+        return {}
+
+    try:
+        enabled = json.loads(
+            (Path.home() / ".claude" / "settings.json").read_text(encoding="utf-8")
+        ).get("enabledPlugins") or {}
+    except (OSError, ValueError):
+        enabled = {}
+
+    found: dict = {}
+    for plugin_id, entries in plugins.items():
+        if enabled.get(plugin_id, True) is False:
+            continue
+        for entry in entries or []:
+            base = Path(str(entry.get("installPath") or "")).expanduser()
+            if not base.is_dir():
+                continue
+            try:
+                manifest = json.loads(
+                    (base / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+                )
+                namespace = str(manifest.get("name") or plugin_id.split("@", 1)[0])
+            except (OSError, ValueError):
+                namespace = plugin_id.split("@", 1)[0]
+            for scanned in (
+                _scan_commands_dir(base / "commands"),
+                _scan_skills_dir(base / "skills"),
+            ):
+                for name, metadata in scanned.items():
+                    found.setdefault(f"{namespace}:{name}", metadata)
+    return found
+
+
 def scan_claude_commands(
     agent_type: str = "claude", project_root: Path | None = None
 ) -> dict:
@@ -228,6 +276,12 @@ def scan_claude_commands(
             if skill_name in commands:
                 continue
             commands[skill_name] = skill_metadata
+
+    # Installed plugins contribute namespaced commands/skills (`plugin:name`).
+    # Explicit user commands/skills stay authoritative on a plain-name collision.
+    for name, metadata in _scan_plugin_commands().items():
+        if name not in commands:
+            commands[name] = metadata
 
     return commands
 
