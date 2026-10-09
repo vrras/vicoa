@@ -113,6 +113,9 @@ const FALLBACK_CODES = new Set([
   'rpc_failed',
 ]);
 
+/** Wait before the single `no_handler` retry (daemon still reconnecting). */
+const NO_HANDLER_RETRY_MS = 5000;
+
 function toCommand(item: SlashCommandItem | ScanCommandLike): CustomCommand {
   const name = item.name.startsWith('/') ? item.name : `/${item.name}`;
   const insert = item.insert ? String(item.insert) : undefined;
@@ -204,7 +207,18 @@ export async function fetchCustomCommands({
 
   if (rpcUsable && machineId) {
     try {
-      const result = await rpcScanCommands(machineId, agentType, projectPath, cached?.hash);
+      let result: Awaited<ReturnType<typeof rpcScanCommands>>;
+      try {
+        result = await rpcScanCommands(machineId, agentType, projectPath, cached?.hash);
+      } catch (err) {
+        if (!(err instanceof RpcError) || err.code !== 'no_handler') throw err;
+        // At app start the page can outrun the daemon's cloud reconnect, and
+        // the server answers `no_handler` for a daemon that supports the
+        // index but hasn't registered yet. Retry once — only a second
+        // `no_handler` means the daemon predates `scan-commands`.
+        await new Promise((resolve) => setTimeout(resolve, NO_HANDLER_RETRY_MS));
+        result = await rpcScanCommands(machineId, agentType, projectPath, cached?.hash);
+      }
       if ('unchanged' in result) {
         // Nothing changed on disk — keep the split lists, refresh the hash.
         const entry: CacheEntry = {

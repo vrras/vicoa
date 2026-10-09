@@ -113,14 +113,46 @@ describe('fallback + negative cache', () => {
     expect(result.source).toBe('rest');
   });
 
-  it('stops attempting the RPC after a no_handler for that machine', async () => {
-    rpcScanCommands.mockRejectedValue(new RpcError('no_handler'));
+  it('retries once when no_handler races the daemon reconnect', async () => {
+    vi.useFakeTimers();
+    try {
+      rpcScanCommands
+        .mockRejectedValueOnce(new RpcError('no_handler'))
+        .mockResolvedValueOnce(RPC_INDEX);
 
-    await fetchCustomCommands({ agentType: 'claude', machineId: 'old', projectPath: '/p' });
-    await fetchCustomCommands({ agentType: 'claude', machineId: 'old', projectPath: '/p' });
+      const pending = fetchCustomCommands({ agentType: 'claude', machineId: 'm1', projectPath: '/p' });
+      await vi.advanceTimersByTimeAsync(5000); // retry backoff
+      const result = await pending;
 
-    // Second call must not pay the grace window again.
-    expect(rpcScanCommands).toHaveBeenCalledTimes(1);
+      expect(result.source).toBe('rpc');
+      expect(result.commands.map((c) => c.command)).toEqual(['/gstack:ship']);
+      expect(getSlashCommandsByAgentType).not.toHaveBeenCalled();
+      // Not written off: a later fetch still consults the live daemon.
+      rpcScanCommands.mockResolvedValueOnce({ unchanged: true, hash: 'h1' });
+      const second = fetchCustomCommands({ agentType: 'claude', machineId: 'm1', projectPath: '/p' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect((await second).source).toBe('rpc');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops attempting the RPC after a repeated no_handler for that machine', async () => {
+    vi.useFakeTimers();
+    try {
+      rpcScanCommands.mockRejectedValue(new RpcError('no_handler'));
+
+      const first = fetchCustomCommands({ agentType: 'claude', machineId: 'old', projectPath: '/p' });
+      await vi.advanceTimersByTimeAsync(5000); // initial + one retry
+      await first;
+      const second = fetchCustomCommands({ agentType: 'claude', machineId: 'old', projectPath: '/p' });
+      await second;
+
+      // First fetch paid initial + retry; later calls skip the RPC entirely.
+      expect(rpcScanCommands).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('serves the cached list when both sources fail', async () => {
